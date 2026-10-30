@@ -11,6 +11,12 @@ public class Movement : MonoBehaviour
     private Rigidbody2D rb;
     private bool isGrounded;
 
+    private void Awake()
+    {
+        rb = GetComponent<Rigidbody2D>();
+        rb.freezeRotation = true;
+    }
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
