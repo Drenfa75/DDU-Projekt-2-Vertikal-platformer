@@ -1,0 +1,4 @@
+repository "DDU Vertikal project/DDU Vertikal project@5773989395338@cloud"
+  path "/"
+    br "/main"
+    co "/main"
