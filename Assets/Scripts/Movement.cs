@@ -1,16 +1,22 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-
 public class Movement : MonoBehaviour
 {
+    [SerializeField] private float speedMultiplier = 2f;
+
     public float moveSpeed = 5f;
     public float jumpForce = 10f;
 
     private Rigidbody2D rb;
-    private bool isGrounded;
+    private float moveInput;
+    private bool jumpPressed;
+    private bool onRamp;
+    private Vector2 rampNormal;
 
+    private readonly HashSet<Collider2D> groundContacts = new();
+
+    private bool isGrounded => groundContacts.Count > 0;
 
     private void Awake()
     {
@@ -18,40 +24,91 @@ public class Movement : MonoBehaviour
         rb.freezeRotation = true;
     }
 
-    void Start()
+    private void Update()
     {
-        rb = GetComponent<Rigidbody2D>();
+        moveInput = Input.GetAxisRaw("Horizontal");
+
+        if (Input.GetKeyDown(KeyCode.Space))
+            jumpPressed = true;
     }
 
-    void Update()
+    private void FixedUpdate()
     {
-        // Left and Right movement
-        float moveInput = Input.GetAxisRaw("Horizontal");
-        rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
+        rb.linearVelocity = new Vector2(
+            moveInput * moveSpeed,
+            rb.linearVelocity.y
+        );
 
-        // Jump 
-        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
+        if (jumpPressed)
         {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            if (isGrounded)
+            {
+                // Set a consistent upward jump speed.
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+                groundContacts.Clear();
+            }
+
+            jumpPressed = false;
+        }
+
+        // Don't add ramp acceleration during a jump.
+        if (onRamp && isGrounded)
+        {
+            Vector2 gravityAlongRamp =
+                Physics2D.gravity -
+                Vector2.Dot(Physics2D.gravity, rampNormal) * rampNormal;
+
+            rb.AddForce(
+                gravityAlongRamp * (speedMultiplier - 1f),
+                ForceMode2D.Force
+            );
         }
     }
 
-    // If player grounded
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Ground"))
+        UpdateContact(collision);
+    }
+
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        UpdateContact(collision);
+    }
+
+    private void UpdateContact(Collision2D collision)
+    {
+        Collider2D other = collision.collider;
+
+        if (!other.CompareTag("Ground") && !other.CompareTag("Ramp"))
+            return;
+
+        for (int i = 0; i < collision.contactCount; i++)
         {
-            isGrounded = true;
+            ContactPoint2D contact = collision.GetContact(i);
+
+            // Ignore wall/underside contacts; count only surfaces beneath the player.
+            if (Vector2.Dot(contact.normal, Vector2.up) > 0f)
+            {
+                groundContacts.Add(other);
+
+                if (other.CompareTag("Ramp"))
+                {
+                    onRamp = true;
+                    rampNormal = contact.normal;
+                }
+
+                break;
+            }
         }
     }
 
     private void OnCollisionExit2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Ground"))
-        {
-            isGrounded = false;
-        }
+        Collider2D other = collision.collider;
+
+        groundContacts.Remove(other);
+
+        if (other.CompareTag("Ramp"))
+            onRamp = false;
     }
-
-
 }
